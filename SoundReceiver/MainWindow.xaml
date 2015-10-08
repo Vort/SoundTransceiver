@@ -1,7 +1,7 @@
 ﻿<Window x:Class="SoundReceiver.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Sound Receiver" Height="352" Width="488" MinWidth="320" MinHeight="328" WindowStartupLocation="CenterScreen">
+        Title="Sound Receiver" Height="352" Width="587" MinWidth="470" MinHeight="352" WindowStartupLocation="CenterScreen">
     <Grid Margin="4">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -17,8 +17,8 @@
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="56" />
         </Grid.ColumnDefinitions>
-        <Slider Grid.Row="0" Grid.Column="1" Name="Freq1Slider" Margin="0,1,0,3" Minimum="100" Maximum="16000" TickFrequency="100" TickPlacement="BottomRight" Value="800" ValueChanged="Slider_ValueChanged" IsSnapToTickEnabled="True" />
-        <Slider Grid.Row="1" Grid.Column="1" Name="Freq2Slider" Margin="0,1,0,3" Minimum="100" Maximum="16000" TickFrequency="100" TickPlacement="BottomRight" Value="1200" ValueChanged="Slider_ValueChanged" IsSnapToTickEnabled="True" />
+        <Slider Grid.Row="0" Grid.Column="1" Name="Freq1Slider" Margin="0,1,0,3" Minimum="100" Maximum="21000" TickFrequency="100" TickPlacement="BottomRight" Value="800" ValueChanged="Slider_ValueChanged" IsSnapToTickEnabled="True" />
+        <Slider Grid.Row="1" Grid.Column="1" Name="Freq2Slider" Margin="0,1,0,3" Minimum="100" Maximum="21000" TickFrequency="100" TickPlacement="BottomRight" Value="1200" ValueChanged="Slider_ValueChanged" IsSnapToTickEnabled="True" />
         <Slider Grid.Row="2" Grid.Column="1" Name="BitrateSlider" Margin="0,1,0,3" Minimum="100" Maximum="4000" TickFrequency="25" TickPlacement="BottomRight" Value="100" ValueChanged="Slider_ValueChanged" IsSnapToTickEnabled="True" />
 
         <TextBlock Grid.Row="0" Grid.Column="0" Text="Frequency 1:" />
@@ -47,10 +47,10 @@
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="182" />
+                <ColumnDefinition Width="202" />
                 <ColumnDefinition Width="8" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="182" />
+                <ColumnDefinition Width="202" />
             </Grid.ColumnDefinitions>
             <Border Grid.Row="1" Grid.Column="1" BorderThickness="1" BorderBrush="LightGray" SnapsToDevicePixels="True">
                 <Border.Background>

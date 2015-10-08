@@ -36,12 +36,18 @@ namespace SoundTransmitter
             m_Bitrate = BitrateSlider.Value;
             BitrateTextBlock.Text = m_Bitrate.ToString() + " bps";
 
-            SendButton.IsEnabled = m_SineFreq1 != m_SineFreq2;
+            SendButton.IsEnabled = (m_SineFreq1 != m_SineFreq2) && (MessageTextBox.Text.Length != 0);
         }
 
         private void Slider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             UpdateParamInfo();
+        }
+
+        private void MessageTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            if (SendButton != null)
+                SendButton.IsEnabled = (m_SineFreq1 != m_SineFreq2) && (MessageTextBox.Text.Length != 0);
         }
 
         private void SendButton_Click(object sender, RoutedEventArgs e)

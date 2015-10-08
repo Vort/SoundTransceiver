@@ -310,8 +310,8 @@ namespace SoundReceiver
             for (int i = 0; i < fltRawBits.Count; i++)
                 bitsValue[i] = fltRawBits[i].Value;
 
-            m_DG1.Fill(bitsValue, -1.0, -0.1, 18);
-            m_DG2.Fill(bitsValue, 0.1, 1.0, 18);
+            m_DG1.Fill(bitsValue, -1.0, -0.001, 20);
+            m_DG2.Fill(bitsValue, 0.001, 1.0, 20);
 
             BitContainer bc = new BitContainer();
             for (int i = 0; i < fltRawBits.Count; i++)
