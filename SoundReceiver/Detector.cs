@@ -46,7 +46,7 @@ namespace SoundReceiver
             m_DG2 = DG2;
         }
 
-        public byte[] Detect(short[] signal)
+        public byte[] Detect(short[] signal, ref string snr)
         {
             if (signal.Length == 0)
                 throw new SignalException("No data");
@@ -107,7 +107,7 @@ namespace SoundReceiver
 
             int signalCenter = (signalStart + signalEnd) / 2;
             double signalStr = (D24[signalCenter] + D25[signalCenter]) / 2 - noiseLevel;
-            string snr = ((int)(Math.Log10(signalStr / noiseLevel) * 10)).ToString();
+            snr = ((int)(Math.Log10(signalStr / noiseLevel) * 10)).ToString() + " dB";
 
             int signalStart2 = 0;
             int signalEnd2 = 0;

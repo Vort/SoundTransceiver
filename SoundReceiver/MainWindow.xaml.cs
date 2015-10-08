@@ -75,6 +75,7 @@ namespace SoundReceiver
                 StartButton.IsEnabled = false;
                 StopButton.IsEnabled = true;
                 MessageTextBox.Text = "";
+                SNRTextBlock.Text = "—";
                 m_Buf = new List<short>();
             }
             catch
@@ -90,11 +91,12 @@ namespace SoundReceiver
 
         void ProcessSignal()
         {
-            string resultStr;
+            string snr = "—";
+            string resultStr = "";
             try
             {
                 StringBuilder sb = new StringBuilder();
-                byte[] data = m_D.Detect(m_Buf.ToArray());
+                byte[] data = m_D.Detect(m_Buf.ToArray(), ref snr);
                 string unfiltered = Encoding.UTF8.GetString(data);
                 foreach (char c in unfiltered)
                     sb.Append(c < ' ' ? '�' : c);
@@ -109,13 +111,13 @@ namespace SoundReceiver
                 DispatcherPriority.Normal,
                 new Action(() =>
                 {
+                    SNRTextBlock.Text = snr;
                     MessageTextBox.Text = resultStr;
 
                     Freq1Slider.IsEnabled = true;
                     Freq2Slider.IsEnabled = true;
                     BitrateSlider.IsEnabled = true;
                     StartButton.IsEnabled = true;
-                    StopButton.IsEnabled = false;
                 }));
         }
     }
