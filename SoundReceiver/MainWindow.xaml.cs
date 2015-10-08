@@ -29,15 +29,18 @@ namespace SoundReceiver
             waveIn = new WaveIn();
             waveIn.WaveFormat = new WaveFormat(44100, 1);
             waveIn.DataAvailable += waveIn_DataAvailable;
+            waveIn.RecordingStopped += waveIn_RecordingStopped;
+        }
+
+        private void waveIn_RecordingStopped(object sender, StoppedEventArgs e)
+        {
+            new Thread(ProcessSignal).Start();
         }
 
         private void waveIn_DataAvailable(object sender, WaveInEventArgs e)
         {
-            lock (m_Buf)
-            {
-                for (int i = 0; i < e.BytesRecorded / 2; i++)
-                    m_Buf.Add(BitConverter.ToInt16(e.Buffer, i * 2));
-            }
+            for (int i = 0; i < e.BytesRecorded / 2; i++)
+                m_Buf.Add(BitConverter.ToInt16(e.Buffer, i * 2));
         }
 
         void UpdateParamInfo()
@@ -66,6 +69,9 @@ namespace SoundReceiver
             {
                 waveIn.StartRecording();
 
+                Freq1Slider.IsEnabled = false;
+                Freq2Slider.IsEnabled = false;
+                BitrateSlider.IsEnabled = false;
                 StartButton.IsEnabled = false;
                 StopButton.IsEnabled = true;
                 MessageTextBox.Text = "";
@@ -80,7 +86,6 @@ namespace SoundReceiver
         {
             waveIn.StopRecording();
             StopButton.IsEnabled = false;
-            new Thread(ProcessSignal).Start();
         }
 
         void ProcessSignal()
@@ -100,16 +105,18 @@ namespace SoundReceiver
                 resultStr = string.Format("[{0}]", e.Message);
             }
 
-            MessageTextBox.Dispatcher.Invoke(
+            Dispatcher.Invoke(
                 DispatcherPriority.Normal,
-                new Action(() => { MessageTextBox.Text = resultStr; }));
+                new Action(() =>
+                {
+                    MessageTextBox.Text = resultStr;
 
-            StartButton.Dispatcher.Invoke(
-                DispatcherPriority.Normal,
-                new Action(() => { StartButton.IsEnabled = true; }));
-            StopButton.Dispatcher.Invoke(
-                DispatcherPriority.Normal,
-                new Action(() => { StopButton.IsEnabled = false; }));
+                    Freq1Slider.IsEnabled = true;
+                    Freq2Slider.IsEnabled = true;
+                    BitrateSlider.IsEnabled = true;
+                    StartButton.IsEnabled = true;
+                    StopButton.IsEnabled = false;
+                }));
         }
     }
 }

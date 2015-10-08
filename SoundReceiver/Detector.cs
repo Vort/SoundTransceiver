@@ -106,8 +106,8 @@ namespace SoundReceiver
                 throw new SignalException("Signal not found");
 
             int signalCenter = (signalStart + signalEnd) / 2;
-            //double signalStr = (D24[signalCenter] + D25[signalCenter]) / 2 - noiseLevel;
-            //snr = ((int)(Math.Log10(signalStr / noiseLevel) * 10)).ToString();
+            double signalStr = (D24[signalCenter] + D25[signalCenter]) / 2 - noiseLevel;
+            string snr = ((int)(Math.Log10(signalStr / noiseLevel) * 10)).ToString();
 
             int signalStart2 = 0;
             int signalEnd2 = 0;
@@ -303,6 +303,8 @@ namespace SoundReceiver
                 }
             }
 
+            if (stage != 3)
+                throw new SignalException("Incorrect signal");
 
             double[] bitsValue = new double[fltRawBits.Count];
             for (int i = 0; i < fltRawBits.Count; i++)
