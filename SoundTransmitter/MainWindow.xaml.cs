@@ -264,7 +264,6 @@ namespace SoundTransmitter
             double Phase = 0;
             for (int i = 0; i < Signal.Length; i++)
             {
-                double T = i / (double)m_SampleRate;
                 Phase += 2 * Math.PI * (CF + D * Signal[i]) / (double)m_SampleRate;
                 ModSignal[i] = Math.Sin(Phase);
             }

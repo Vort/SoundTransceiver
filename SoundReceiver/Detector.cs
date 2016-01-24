@@ -88,7 +88,7 @@ namespace SoundReceiver
                 if ((signalStart == 0) &&
                     (D24[i] > 2.0 * D23[i]))
                 {
-                    noiseLevel = D23[i];
+                    noiseLevel = D23[i - bitLen];
                     signalStart = i;
                 }
                 if ((signalStart != 0) &&
@@ -106,8 +106,6 @@ namespace SoundReceiver
                 throw new SignalException("Signal not found");
 
             int signalCenter = (signalStart + signalEnd) / 2;
-            double signalStr = (D24[signalCenter] + D25[signalCenter]) / 2 - noiseLevel;
-            snr = ((int)(Math.Log10(signalStr / noiseLevel) * 10)).ToString() + " dB";
 
             int signalStart2 = 0;
             int signalEnd2 = 0;
@@ -136,6 +134,9 @@ namespace SoundReceiver
 
             signalStart2 += bitLen / 2;
             signalEnd2 -= bitLen / 2;
+
+            double signalStr = D23[(signalStart2 + signalEnd2) / 2] - noiseLevel;
+            snr = ((int)(Math.Log10(signalStr / noiseLevel) * 10)).ToString();
 
             if (debug)
             {
