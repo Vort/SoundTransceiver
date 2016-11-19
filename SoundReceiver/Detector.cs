@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace SoundReceiver
 {
@@ -55,6 +56,8 @@ namespace SoundReceiver
             double sineFreqC = (sineFreq1 + sineFreq2) / 2;
 
             double[] D1 = SignalStoD(signal);
+            SaveWav(string.Format("RS_{0}_{1}_{2}_N.wav",
+                sineFreq1, sineFreq2, bitrate), SignalDtoS(Normalize(D1)));
             if (debug) SaveWav("e:\\_Research\\Sound\\RawSignal_D1.wav", SignalDtoS(Normalize(D1)));
 
             int F1size = 127;
@@ -558,13 +561,24 @@ namespace SoundReceiver
 
             double[] R = new double[W2.Length - W1.Length];
 
-            for (int i = 0; i < R.Length; i++)
-            {
-                double Sum = 0;
-                for (int j = 0; j < W1.Length; j++)
-                    Sum += W1[j] * W2[i + j];
-                R[i] = Sum;
-            }
+            int blockSize = 512;
+            int blockCount = (R.Length + blockSize - 1) / blockSize;
+
+            Parallel.For(0, blockCount, i =>
+                {
+                    int startSample = i * blockSize;
+                    int xendSample = blockSize;
+                    if (i == blockCount - 1)
+                        xendSample = R.Length - blockSize * i;
+                    xendSample += startSample;
+                    for (int j = startSample; j < xendSample; j++)
+                    {
+                        double Sum = 0;
+                        for (int k = 0; k < W1.Length; k++)
+                            Sum += W1[k] * W2[j + k];
+                        R[j] = Sum;
+                    }
+                });
             return R;
         }
 
