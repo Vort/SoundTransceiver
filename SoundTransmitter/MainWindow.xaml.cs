@@ -10,13 +10,15 @@ namespace SoundTransmitter
 {
     public partial class MainWindow : Window
     {
-        double m_Bitrate = 100;
-        double m_SineFreq1 = 800;
-        double m_SineFreq2 = 1200;
+        const int sampleRate = 44100;
 
-        const int m_SampleRate = 44100;
+        double bitrate = 100;
+        double carrierFreq = 1000;
 
-        string m_Message;
+        int sendRrcBitCount = 64;
+        double rrcBeta = 0.8;
+
+        string message;
 
 
         public MainWindow()
@@ -26,17 +28,15 @@ namespace SoundTransmitter
 
         void UpdateParamInfo()
         {
-            if (Freq1TextBlock == null)
+            if (FreqTextBlock == null)
                 return;
 
-            m_SineFreq1 = Freq1Slider.Value;
-            Freq1TextBlock.Text = m_SineFreq1.ToString() + " Hz";
-            m_SineFreq2 = Freq2Slider.Value;
-            Freq2TextBlock.Text = m_SineFreq2.ToString() + " Hz";
-            m_Bitrate = BitrateSlider.Value;
-            BitrateTextBlock.Text = m_Bitrate.ToString() + " bps";
+            carrierFreq = FreqSlider.Value;
+            FreqTextBlock.Text = carrierFreq.ToString() + " Hz";
+            bitrate = BitrateSlider.Value;
+            BitrateTextBlock.Text = bitrate.ToString() + " bps";
 
-            SendButton.IsEnabled = (m_SineFreq1 != m_SineFreq2) && (MessageTextBox.Text.Length != 0);
+            SendButton.IsEnabled = MessageTextBox.Text.Length != 0;
         }
 
         private void Slider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -47,55 +47,40 @@ namespace SoundTransmitter
         private void MessageTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
         {
             if (SendButton != null)
-                SendButton.IsEnabled = (m_SineFreq1 != m_SineFreq2) && (MessageTextBox.Text.Length != 0);
+                SendButton.IsEnabled = MessageTextBox.Text.Length != 0;
         }
 
         private void SendButton_Click(object sender, RoutedEventArgs e)
         {
-            Freq1Slider.IsEnabled = false;
-            Freq2Slider.IsEnabled = false;
+            FreqSlider.IsEnabled = false;
             BitrateSlider.IsEnabled = false;
             MessageTextBox.IsEnabled = false;
             SendButton.IsEnabled = false;
 
-            m_Message = MessageTextBox.Text;
+            message = MessageTextBox.Text;
             new Thread(MakeSignal).Start();
         }
 
         void MakeSignal()
         {
-            byte[] MsgS = Encoding.UTF8.GetBytes(m_Message);
-            byte[] BitStream = Encode(MsgS);
-            double[] Gaussian = MakeGaussian(1 / m_Bitrate);
-            double[] DigitalSignal = MakeDigitalSignal(m_Bitrate, BitStream);
-            double[] AmpSignal1 = MakeAmpSignal(m_Bitrate, DigitalSignal.Length);
-            double[] AmpSignal2 = Normalize(Convolution2(Gaussian, AmpSignal1));
-            double[] DigitalSignal3 = Normalize(Convolution2(Gaussian, DigitalSignal));
-            double[] FModSignal = FModulation(DigitalSignal3, m_SineFreq1, m_SineFreq2);
-            double[] AFModSignal = AModulation(FModSignal, AmpSignal2);
-            double[] Silence = MakeSilence(0.1);
-            double[] Result = Silence.Concat(AFModSignal).Concat(Silence).ToArray();
+            var data = Encoding.UTF8.GetBytes(message);
 
-            /*
-            SaveWav("1.wav", SignalDtoS(Gaussian));
-            SaveWav("2.wav", SignalDtoS(DigitalSignal));
-            SaveWav("3.wav", SignalDtoS(AmpSignal1));
-            SaveWav("4.wav", SignalDtoS(AmpSignal2));
-            SaveWav("5.wav", SignalDtoS(DigitalSignal3));
-            SaveWav("6.wav", SignalDtoS(FModSignal));
-            SaveWav("7.wav", SignalDtoS(AFModSignal));
-            */
+            double[] bitPositions;
+            double[] digitalSignal = Mul(MakeFilteredDigitalSignal(
+                bitrate, data, rrcBeta, sendRrcBitCount, 4, out bitPositions), 0.67);
+            double[] aModSignal = AModulation(digitalSignal, carrierFreq);
+            double[] silence = MakeSilence(0.1);
+            double[] result = silence.Concat(aModSignal).Concat(silence).ToArray();
 
-            string outName = string.Format("TS_{0}_{1}_{2}.wav",
-                m_SineFreq1, m_SineFreq2, m_Bitrate);
-            SaveWav(outName, SignalDtoS(Result));
+            string outName = string.Format("s_{0}_{1}.wav", carrierFreq, bitrate);
+            SaveWav(outName, SignalDtoS(result), 2);
 
             for (int i = 0; i < 3; i++)
             {
                 SendButton.Dispatcher.Invoke(
                     DispatcherPriority.Normal,
                     new Action(() => { SendButton.Content = (3 - i); }));
-                System.Threading.Thread.Sleep(500);
+                Thread.Sleep(500);
             }
             SendButton.Dispatcher.Invoke(
                 DispatcherPriority.Normal,
@@ -109,12 +94,9 @@ namespace SoundTransmitter
             File.Delete(outName);
 
 
-            Freq1Slider.Dispatcher.Invoke(
+            FreqSlider.Dispatcher.Invoke(
                 DispatcherPriority.Normal,
-                new Action(() => { Freq1Slider.IsEnabled = true; }));
-            Freq2Slider.Dispatcher.Invoke(
-                DispatcherPriority.Normal,
-                new Action(() => { Freq2Slider.IsEnabled = true; }));
+                new Action(() => { FreqSlider.IsEnabled = true; }));
             BitrateSlider.Dispatcher.Invoke(
                 DispatcherPriority.Normal,
                 new Action(() => { BitrateSlider.IsEnabled = true; }));
@@ -132,144 +114,95 @@ namespace SoundTransmitter
 
         double[] MakeSilence(double T)
         {
-            return new double[(int)(T * m_SampleRate)];
+            return new double[(int)(T * sampleRate)];
         }
 
-        byte[] Encode(byte[] Message)
+        double[] MakeFilteredDigitalSignal(double bitrate, byte[] message,
+            double rrcBeta, int rrcBitCount, int padSize, out double[] bitPositions)
         {
-            byte[] BitStream = new byte[Message.Length * 8];
-            for (int i = 0; i < Message.Length; i++)
+            sbyte[] symbols = new sbyte[message.Length * 8];
+            for (int i = 0; i < message.Length; i++)
             {
                 for (int j = 0; j < 8; j++)
                 {
-                    bool Bit = false;
-                    if ((Message[i] & (1 << (7 - j))) != 0)
-                        Bit = true;
-                    BitStream[i * 8 + j] = (byte)(Bit ? 1 : 0);
+                    bool bit = false;
+                    if ((message[i] & (1 << (7 - j))) != 0)
+                        bit = true;
+                    symbols[i * 8 + j] = (sbyte)(bit ? 1 : -1);
                 }
             }
-            return new byte[] { 0, 0, 0, 0, 1, 0 }.Concat(BitStream).Concat(new byte[] { 0, 0, 0, 0 }).ToArray();
-        }
 
-        double[] MakeGaussian(double Duration)
-        {
-            int SignalLen = (int)(Duration * m_SampleRate);
+            var pad = Enumerable.Repeat<sbyte>(-1, padSize).ToArray();
+            symbols = pad.Concat(new sbyte[] { 1, -1 }).Concat(
+                symbols).Concat(pad).ToArray();
 
-            double A = Math.PI * 2;
-            double[] Gaussian = new double[SignalLen];
+            double bitDuration = sampleRate / bitrate;
+            int rrcLen = (int)(rrcBitCount * bitDuration);
 
-            for (int i = 0; i < SignalLen; i++)
+            int signalLen = (int)(symbols.Length * bitDuration);
+
+            bitPositions = new double[signalLen];
+            double[] digitalSignal = new double[signalLen + rrcLen];
+
+            for (int i = 0; i < symbols.Length; i++)
             {
-                double X = (2 * i / (double)SignalLen - 1);
-                Gaussian[i] = Math.Exp(-A * X * X);
-            }
-            return Gaussian;
-        }
+                double bitPosition = (i + 0.5) * bitDuration;
+                bitPositions[(int)bitPosition] = symbols[i];
 
-        double[] MakeAmpSignal(double Bitrate, int SignalLen)
-        {
-            double BitLen = m_SampleRate / Bitrate;
-            double[] AmpSignal = new double[SignalLen];
-            for (int i = 0; i < SignalLen; i++)
-                AmpSignal[i] = ((i > BitLen / 2) && (i < SignalLen - BitLen / 2)) ? 1 : -1;
-            return AmpSignal;
-        }
-
-        double[] MakeDigitalSignal(double Bitrate, byte[] Bits)
-        {
-            int SignalLen = (int)((Bits.Length / Bitrate) * m_SampleRate);
-
-            double[] DigitalSignal = new double[SignalLen];
-
-            for (int i = 0; i < SignalLen; i++)
-            {
-                int BitIndex = (int)(Bitrate * i / m_SampleRate);
-                DigitalSignal[i] = (Bits[BitIndex] == 1) ? 1 : -1;
+                for (int j = 0; j < rrcLen; j++)
+                {
+                    int bitPositionI = (int)Math.Floor(bitPosition);
+                    double bitPositionF = bitPosition - bitPositionI;
+                    digitalSignal[bitPositionI + j] += RootRaisedCosine(
+                        j - rrcLen / 2 - bitPositionF, bitDuration, rrcBeta) * symbols[i];
+                }
             }
 
-            return DigitalSignal;
+            return digitalSignal;
         }
 
-        double[] PadSignal(double Bitrate, double BitCount, double[] Signal)
+        double RootRaisedCosine(double t, double bitDuration, double beta)
         {
-            double[] Pad = new double[(int)(BitCount * m_SampleRate / Bitrate)];
-            return Pad.Concat(Signal).Concat(Pad).ToArray();
-        }
-
-        double[] Normalize(double[] Signal)
-        {
-            double Min = double.MaxValue;
-            double Max = double.MinValue;
-            foreach (double D in Signal)
+            double epsilon = 1e-12;
+            if (Math.Abs(t) < epsilon)
             {
-                if (D < Min)
-                    Min = D;
-                if (D > Max)
-                    Max = D;
+                return 1.0 + beta * (4.0 / Math.PI - 1.0);
             }
-
-            double MaxAbs = Math.Max(Math.Abs(Min), Math.Abs(Max));
-
-            double[] NormSignal = new double[Signal.Length];
-            for (int i = 0; i < Signal.Length; i++)
-                NormSignal[i] = (Signal[i] / MaxAbs);
-            return NormSignal;
-        }
-
-        double[] Convolution2(double[] W1, double[] W2)
-        {
-            int padLen = W1.Length / 2;
-            double[] pad1 = new double[padLen];
-            double[] pad2 = new double[padLen];
-            for (int i = 0; i < padLen; i++)
-                pad1[i] = W2[0];
-            for (int i = 0; i < padLen; i++)
-                pad2[i] = W2[W2.Length - 1];
-            return Convolution(W1, pad1.Concat(W2).Concat(pad2).ToArray());
-        }
-
-        double[] Convolution(double[] W1, double[] W2)
-        {
-            if (W2.Length <= W1.Length)
-                return new double[0];
-
-            double[] R = new double[W2.Length - W1.Length];
-
-            for (int i = 0; i < R.Length; i++)
+            else if (Math.Abs(Math.Abs(t) - bitDuration / (4.0 * beta)) > epsilon)
             {
-                double Sum = 0;
-                for (int j = 0; j < W1.Length; j++)
-                    Sum += W1[j] * W2[i + j];
-                R[i] = Sum / W1.Length;
+                double f = t / bitDuration;
+                return (
+                    Math.Sin((Math.PI * f) * (1.0 - beta)) +
+                    (4.0 * beta * f) *
+                    Math.Cos((Math.PI * f) * (1.0 + beta))) /
+                    ((Math.PI * f) *
+                    (1.0 - Math.Pow(4.0 * beta * f, 2.0)));
             }
-            return R;
-        }
-
-        double[] AModulation(double[] DataSignal, double[] AmpSignal)
-        {
-            double[] Signal = new double[Math.Min(DataSignal.Length, AmpSignal.Length)];
-
-            for (int i = 0; i < Signal.Length; i++)
-                Signal[i] = DataSignal[i] * (AmpSignal[i] * 0.5 + 0.5);
-
-            return Signal;
-        }
-
-        double[] FModulation(double[] Signal, double Freq1, double Freq2)
-        {
-            double CF = (Freq2 + Freq1) / 2;
-            double D = (Freq2 - Freq1) / 2;
-            double[] ModSignal = new double[Signal.Length];
-
-            double Phase = 0;
-            for (int i = 0; i < Signal.Length; i++)
+            else
             {
-                Phase += 2 * Math.PI * (CF + D * Signal[i]) / (double)m_SampleRate;
-                ModSignal[i] = Math.Sin(Phase);
+                return (beta / Math.Sqrt(2.0)) *
+                    ((1.0 + 2.0 / Math.PI) * Math.Sin(Math.PI / (4.0 * beta)) +
+                    (1.0 - 2.0 / Math.PI) * Math.Cos(Math.PI / (4.0 * beta)));
             }
-            return ModSignal;
         }
 
+        double[] Mul(double[] signal, double value)
+        {
+            double[] r = new double[signal.Length];
+
+            for (int i = 0; i < signal.Length; i++)
+                r[i] = signal[i] * value;
+
+            return r;
+        }
+        
+        double[] AModulation(double[] signal, double freq)
+        {
+            double[] modSignal = new double[signal.Length];
+            for (int i = 0; i < signal.Length; i++)
+                modSignal[i] = signal[i] * Math.Cos(2 * Math.PI * (freq * i / sampleRate));
+            return modSignal;
+        }
 
 
 
@@ -281,26 +214,29 @@ namespace SoundTransmitter
             return SignalS;
         }
 
-        void SaveWav(string Path, short[] Signal)
+        void SaveWav(string path, short[] signal, int channelCount, int sampleRate = sampleRate)
         {
-            FileStream FS = File.Open(Path, FileMode.Create);
-            FS.Write(new byte[] { 0x52, 0x49, 0x46, 0x46 }, 0, 4); // "RIFF"
-            FS.Write(BitConverter.GetBytes((uint)(36 + Signal.Length * 2)), 0, 4);
-            FS.Write(new byte[] { 0x57, 0x41, 0x56, 0x45 }, 0, 4); // "WAVE"
-            FS.Write(new byte[] { 0x66, 0x6D, 0x74, 0x20 }, 0, 4); // "fmt"
-            FS.Write(BitConverter.GetBytes((uint)(16)), 0, 4);
-            FS.Write(BitConverter.GetBytes((ushort)(1)), 0, 2);
-            FS.Write(BitConverter.GetBytes((ushort)(1)), 0, 2); // mono
-            FS.Write(BitConverter.GetBytes((uint)(44100)), 0, 4); // Hz
-            FS.Write(BitConverter.GetBytes((uint)(44100 * 2)), 0, 4);
-            FS.Write(BitConverter.GetBytes((ushort)(2)), 0, 2);
-            FS.Write(BitConverter.GetBytes((ushort)(16)), 0, 2); // bps
-            FS.Write(new byte[] { 0x64, 0x61, 0x74, 0x61 }, 0, 4); // "data"
-            FS.Write(BitConverter.GetBytes((uint)(Signal.Length * 2)), 0, 4);
-            foreach (short V in Signal)
-                FS.Write(BitConverter.GetBytes(V), 0, 2);
-
-            FS.Close();
+            FileStream fs = File.Open(path, FileMode.Create);
+            fs.Write(new byte[] { 0x52, 0x49, 0x46, 0x46 }, 0, 4); // "RIFF"
+            fs.Write(BitConverter.GetBytes((uint)(36 + signal.Length * 2 * channelCount)), 0, 4);
+            fs.Write(new byte[] { 0x57, 0x41, 0x56, 0x45 }, 0, 4); // "WAVE"
+            fs.Write(new byte[] { 0x66, 0x6D, 0x74, 0x20 }, 0, 4); // "fmt"
+            fs.Write(BitConverter.GetBytes((uint)(16)), 0, 4);
+            fs.Write(BitConverter.GetBytes((ushort)(1)), 0, 2);
+            fs.Write(BitConverter.GetBytes((ushort)(channelCount)), 0, 2);
+            fs.Write(BitConverter.GetBytes((uint)(sampleRate)), 0, 4); // Hz
+            fs.Write(BitConverter.GetBytes((uint)(sampleRate * 2 * channelCount)), 0, 4);
+            fs.Write(BitConverter.GetBytes((ushort)(2 * channelCount)), 0, 2);
+            fs.Write(BitConverter.GetBytes((ushort)(16)), 0, 2); // bps
+            fs.Write(new byte[] { 0x64, 0x61, 0x74, 0x61 }, 0, 4); // "data"
+            fs.Write(BitConverter.GetBytes((uint)(signal.Length * 2 * channelCount)), 0, 4);
+            foreach (short v in signal)
+            {
+                fs.Write(BitConverter.GetBytes(v), 0, 2);
+                for (int i = 0; i < channelCount - 1; i++)
+                    fs.Write(BitConverter.GetBytes((ushort)0), 0, 2);
+            }
+            fs.Close();
         }
     }
 }

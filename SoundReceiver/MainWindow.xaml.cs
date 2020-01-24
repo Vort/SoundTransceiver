@@ -13,18 +13,16 @@ namespace SoundReceiver
         List<short> m_Buf;
         WaveIn waveIn;
 
-        Detector m_D;
+        Detector detector;
 
-        Diagram m_DG1;
-        Diagram m_DG2;
+        Diagram bitLevelsDiagram;
 
         public MainWindow()
         {
             InitializeComponent();
 
-            m_DG1 = new Diagram(Canvas1);
-            m_DG2 = new Diagram(Canvas2);
-            m_D = new Detector(m_DG1, m_DG2);
+            bitLevelsDiagram = new Diagram(Canvas1);
+            detector = new Detector(bitLevelsDiagram);
 
             waveIn = new WaveIn();
             waveIn.WaveFormat = new WaveFormat(44100, 1);
@@ -45,17 +43,13 @@ namespace SoundReceiver
 
         void UpdateParamInfo()
         {
-            if (Freq1TextBlock == null)
+            if (FreqTextBlock == null)
                 return;
 
-            m_D.sineFreq1 = Freq1Slider.Value;
-            Freq1TextBlock.Text = m_D.sineFreq1.ToString() + " Hz";
-            m_D.sineFreq2 = Freq2Slider.Value;
-            Freq2TextBlock.Text = m_D.sineFreq2.ToString() + " Hz";
-            m_D.bitrate = BitrateSlider.Value;
-            BitrateTextBlock.Text = m_D.bitrate.ToString() + " bps";
-
-            StartButton.IsEnabled = m_D.sineFreq1 != m_D.sineFreq2;
+            detector.carrierFreq = FreqSlider.Value;
+            FreqTextBlock.Text = detector.carrierFreq.ToString() + " Hz";
+            detector.bitrate = BitrateSlider.Value;
+            BitrateTextBlock.Text = detector.bitrate.ToString() + " bps";
         }
 
         private void Slider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -69,8 +63,7 @@ namespace SoundReceiver
             {
                 waveIn.StartRecording();
 
-                Freq1Slider.IsEnabled = false;
-                Freq2Slider.IsEnabled = false;
+                FreqSlider.IsEnabled = false;
                 BitrateSlider.IsEnabled = false;
                 StartButton.IsEnabled = false;
                 StopButton.IsEnabled = true;
@@ -91,16 +84,18 @@ namespace SoundReceiver
 
         void ProcessSignal()
         {
-            string snr = "—";
+            string snrS = "—";
             string resultStr = "";
             try
             {
+                double snr;
                 StringBuilder sb = new StringBuilder();
-                byte[] data = m_D.Detect(m_Buf.ToArray(), ref snr);
+                byte[] data = detector.Detect(m_Buf.ToArray(), out snr);
                 string unfiltered = Encoding.UTF8.GetString(data);
                 foreach (char c in unfiltered)
                     sb.Append(c < ' ' ? '�' : c);
                 resultStr = sb.ToString();
+                snrS = $"{snr,2} dB";
             }
             catch (SignalException e)
             {
@@ -111,11 +106,10 @@ namespace SoundReceiver
                 DispatcherPriority.Normal,
                 new Action(() =>
                 {
-                    SNRTextBlock.Text = snr;
+                    SNRTextBlock.Text = snrS;
                     MessageTextBox.Text = resultStr;
 
-                    Freq1Slider.IsEnabled = true;
-                    Freq2Slider.IsEnabled = true;
+                    FreqSlider.IsEnabled = true;
                     BitrateSlider.IsEnabled = true;
                     StartButton.IsEnabled = true;
                 }));
