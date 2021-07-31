@@ -220,6 +220,8 @@ namespace SoundReceiver
             Complex[,] s = ToeplitzMatrix(
                 ToComplex(trainSignal.Skip(trainOffset4 + deltaRange).Take(trainSize2).ToArray()),
                 ToComplex(trainSignal.Skip(trainOffset4 - deltaRange).Take(deltaRange * 2 + 1).Reverse().ToArray()));
+            if (r.GetLength(0) != s.GetLength(0))
+                throw new SignalException("Equalizer construction failed");
 
             Complex[,] rct = ConjugateTranspose(r);
             Complex[,] rctrirct = Mul(Inverse(Mul(rct, r)), rct);
