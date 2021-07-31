@@ -59,7 +59,6 @@
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="BitContainer.cs" />
     <Compile Include="Detector.cs" />
     <Compile Include="Diagram.cs" />
     <Compile Include="MainWindow.xaml.cs">

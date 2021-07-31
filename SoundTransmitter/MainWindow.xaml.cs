@@ -15,8 +15,17 @@ namespace SoundTransmitter
         double bitrate = 100;
         double carrierFreq = 1000;
 
+        sbyte[] equalizerTrainSequence = new sbyte[]
+        {
+            1, 1, 1, 1, 1, -1, 1, -1,
+            -1, -1, 1, -1, 1, 1, 1, 1,
+            1, -1, 1, -1, -1, 1, 1, -1,
+            -1, -1, -1, 1, -1, -1, -1, -1
+        };
         int sendRrcBitCount = 64;
         double rrcBeta = 0.8;
+
+        int payloadSizeLsbSize = 3;
 
         string message;
 
@@ -65,9 +74,9 @@ namespace SoundTransmitter
         {
             var data = Encoding.UTF8.GetBytes(message);
 
-            double[] bitPositions;
-            double[] digitalSignal = Mul(MakeFilteredDigitalSignal(
-                bitrate, data, rrcBeta, sendRrcBitCount, 4, out bitPositions), 0.67);
+            sbyte[] symbols = MakePacketSymbols(data);
+            double[] digitalSignal = Mul(MakePulsesShape(symbols,
+                sampleRate, bitrate, rrcBeta, sendRrcBitCount), 0.67);
             double[] aModSignal = AModulation(digitalSignal, carrierFreq);
             double[] silence = MakeSilence(0.1);
             double[] result = silence.Concat(aModSignal).Concat(silence).ToArray();
@@ -117,48 +126,49 @@ namespace SoundTransmitter
             return new double[(int)(T * sampleRate)];
         }
 
-        double[] MakeFilteredDigitalSignal(double bitrate, byte[] message,
-            double rrcBeta, int rrcBitCount, int padSize, out double[] bitPositions)
+        sbyte[] MakePacketSymbols(byte[] payload)
         {
-            sbyte[] symbols = new sbyte[message.Length * 8];
-            for (int i = 0; i < message.Length; i++)
+            sbyte[] payloadSizeLsb = new sbyte[payloadSizeLsbSize];
+            for (int i = 0; i < payloadSizeLsbSize; i++)
+            {
+                int mask = 1 << (payloadSizeLsbSize - i - 1);
+                payloadSizeLsb[i] = (sbyte)((payload.Length & mask) == 0 ? -1 : 1);
+            }
+            sbyte[] symbols = new sbyte[payload.Length * 8];
+            for (int i = 0; i < payload.Length; i++)
             {
                 for (int j = 0; j < 8; j++)
                 {
                     bool bit = false;
-                    if ((message[i] & (1 << (7 - j))) != 0)
+                    if ((payload[i] & (1 << (7 - j))) != 0)
                         bit = true;
                     symbols[i * 8 + j] = (sbyte)(bit ? 1 : -1);
                 }
             }
 
-            var pad = Enumerable.Repeat<sbyte>(-1, padSize).ToArray();
-            symbols = pad.Concat(new sbyte[] { 1, -1 }).Concat(
-                symbols).Concat(pad).ToArray();
+            return equalizerTrainSequence.Concat(payloadSizeLsb).Concat(symbols).ToArray();
+        }
 
+        double[] MakePulsesShape(sbyte[] symbols,
+            double sampleRate, double bitrate, double rrcBeta, int rrcBitCount)
+        {
             double bitDuration = sampleRate / bitrate;
-            int rrcLen = (int)(rrcBitCount * bitDuration);
+            int rrcLen = (int)(rrcBitCount * bitDuration) | 1;
+            int signalLen = (int)((symbols.Length - 1) * bitDuration + 1);
 
-            int signalLen = (int)(symbols.Length * bitDuration);
-
-            bitPositions = new double[signalLen];
-            double[] digitalSignal = new double[signalLen + rrcLen];
-
+            double[] signal = new double[signalLen + rrcLen];
             for (int i = 0; i < symbols.Length; i++)
             {
-                double bitPosition = (i + 0.5) * bitDuration;
-                bitPositions[(int)bitPosition] = symbols[i];
-
+                double bitPosition = i * bitDuration;
+                int bitPositionI = (int)Math.Floor(bitPosition);
+                double bitPositionF = bitPosition - bitPositionI;
                 for (int j = 0; j < rrcLen; j++)
                 {
-                    int bitPositionI = (int)Math.Floor(bitPosition);
-                    double bitPositionF = bitPosition - bitPositionI;
-                    digitalSignal[bitPositionI + j] += RootRaisedCosine(
+                    signal[bitPositionI + j] += RootRaisedCosine(
                         j - rrcLen / 2 - bitPositionF, bitDuration, rrcBeta) * symbols[i];
                 }
             }
-
-            return digitalSignal;
+            return signal;
         }
 
         double RootRaisedCosine(double t, double bitDuration, double beta)

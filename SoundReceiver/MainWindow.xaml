@@ -17,7 +17,7 @@
             <ColumnDefinition Width="56" />
         </Grid.ColumnDefinitions>
         <Slider Grid.Row="0" Grid.Column="1" Name="FreqSlider" Margin="0,1,0,3" Minimum="100" Maximum="20900" TickFrequency="100" TickPlacement="BottomRight" Value="1000" ValueChanged="Slider_ValueChanged" IsSnapToTickEnabled="True" />
-        <Slider Grid.Row="1" Grid.Column="1" Name="BitrateSlider" Margin="0,1,0,3" Minimum="100" Maximum="4000" TickFrequency="50" TickPlacement="BottomRight" Value="100" ValueChanged="Slider_ValueChanged" IsSnapToTickEnabled="True" />
+        <Slider Grid.Row="1" Grid.Column="1" Name="BitrateSlider" Margin="0,1,0,3" Minimum="100" Maximum="8000" TickFrequency="100" TickPlacement="BottomRight" Value="100" ValueChanged="Slider_ValueChanged" IsSnapToTickEnabled="True" />
 
         <TextBlock Grid.Row="0" Grid.Column="0" Text="Frequency:" />
         <TextBlock Grid.Row="1" Grid.Column="0" Text="Bitrate:" />
