@@ -69,6 +69,7 @@ namespace SoundReceiver
                 StopButton.IsEnabled = true;
                 MessageTextBox.Text = "";
                 SNRTextBlock.Text = "—";
+                MERTextBlock.Text = "—";
                 m_Buf = new List<short>();
             }
             catch
@@ -85,17 +86,20 @@ namespace SoundReceiver
         void ProcessSignal()
         {
             string snrS = "—";
+            string merS = "—";
             string resultStr = "";
             try
             {
                 double snr;
+                double mer;
                 StringBuilder sb = new StringBuilder();
-                byte[] data = detector.Detect(m_Buf.ToArray(), out snr);
+                byte[] data = detector.Detect(m_Buf.ToArray(), out snr, out mer);
                 string unfiltered = Encoding.UTF8.GetString(data);
                 foreach (char c in unfiltered)
                     sb.Append(c < ' ' ? '�' : c);
                 resultStr = sb.ToString();
                 snrS = $"{snr,2} dB";
+                merS = $"{mer,2} dB";
             }
             catch (SignalException e)
             {
@@ -107,6 +111,7 @@ namespace SoundReceiver
                 new Action(() =>
                 {
                     SNRTextBlock.Text = snrS;
+                    MERTextBlock.Text = merS;
                     MessageTextBox.Text = resultStr;
 
                     FreqSlider.IsEnabled = true;

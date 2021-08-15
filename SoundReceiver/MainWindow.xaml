@@ -22,13 +22,26 @@
         <TextBlock Grid.Row="0" Grid.Column="0" Text="Frequency:" />
         <TextBlock Grid.Row="1" Grid.Column="0" Text="Bitrate:" />
         <TextBlock Grid.Row="4" Grid.Column="0" Text="Message:" VerticalAlignment="Center" Margin="0,0,0,8" />
-        <TextBlock Grid.Row="3" Grid.Column="0" Text="SNR:" VerticalAlignment="Center" Margin="0,0,0,8" />
+        <Grid Grid.Column="0" Grid.Row="3" Grid.ColumnSpan="3">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="80" />
+                <ColumnDefinition Width="120" />
+                <ColumnDefinition Width="80" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="SNR:" ToolTip="Signal-to-noise ratio" VerticalAlignment="Center" Margin="0,0,0,8" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Name="SNRTextBlock" Text="—" />
+            <TextBlock Grid.Row="0" Grid.Column="2" Text="MER:" ToolTip="Modulation error ratio" VerticalAlignment="Center" Margin="0,0,0,8" />
+            <TextBlock Grid.Row="0" Grid.Column="3" Name="MERTextBlock" Text="—" />
+        </Grid>
 
         <TextBox IsReadOnly="True" Grid.Row="4" Grid.Column="1" Name="MessageTextBox" Margin="0,0,0,8"></TextBox>
 
         <TextBlock Grid.Row="0" Grid.Column="2" Name="FreqTextBlock" Text="1000 Hz" FontWeight="Bold" />
         <TextBlock Grid.Row="1" Grid.Column="2" Name="BitrateTextBlock" Text="100 bps" FontWeight="Bold" />
-        <TextBlock Grid.Row="3" Grid.Column="1" Name="SNRTextBlock" Text="—" />
 
         <StackPanel Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="3" HorizontalAlignment="Center" Orientation="Horizontal">
             <Button Margin="4,8,4,8" Width="80" Name="StartButton" Click="StartButton_Click">Start</Button>

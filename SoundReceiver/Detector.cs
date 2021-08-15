@@ -37,15 +37,18 @@ namespace SoundReceiver
 
         int payloadSizeLsbSize = 3;
 
+        Fourier fourier;
+
         Diagram bitLevelsDiagram;
 
 
         public Detector(Diagram bitLevelsDiagram)
         {
+            fourier = new Fourier();
             this.bitLevelsDiagram = bitLevelsDiagram;
         }
 
-        public byte[] Detect(short[] signal, out double snr)
+        public byte[] Detect(short[] signal, out double snr, out double mer)
         {
             if (signal.Length == 0)
                 throw new SignalException("No data");
@@ -70,12 +73,12 @@ namespace SoundReceiver
             int bitLen = (int)(sampleRate / bitrate);
 
             double[] D22 = Integrate(D21, bitLen);
-            if (debug) SaveWav("d22.wav", SignalDtoS(Normalize(D22)));
+            //if (debug) SaveWav("d22.wav", SignalDtoS(Normalize(D22)));
             double[] D23 = Integrate(D21, bitLen * 8);
             //if (debug) SaveWav("d23.wav", SignalDtoS(D23));
 
-            double[] D24 = new double[D22.Length];
-            double[] D25 = new double[D22.Length];
+            double[] D24 = new double[D22.Length - bitLen * 8];
+            double[] D25 = new double[D22.Length - bitLen * 8];
             MinMax(D22, bitLen * 8, D24, D25);
 
             //if (debug) SaveWav("d24.wav", SignalDtoS(D24));
@@ -85,7 +88,7 @@ namespace SoundReceiver
             double noiseLevel = 0.0;
             int signalStart = 0;
             int signalEnd = 0;
-            for (int i = bitLen * 8; i < D23.Length; i++)
+            for (int i = bitLen * 8; i < D24.Length; i++)
             {
                 if ((signalStart == 0) &&
                     (D24[i] > 2.0 * D23[i]))
@@ -133,14 +136,28 @@ namespace SoundReceiver
             if (signalStart2 == 0)
                 throw new SignalException("Signal start #2 is not found");
 
-            double signalAvgLevel = D23[signalCenter];
-            double signalStr = signalAvgLevel - noiseLevel;
-            snr = 99;
-            if (noiseLevel != 0.0)
-                snr = Math.Round(Math.Log10(signalStr / noiseLevel) * 20);
-
             signalStart2 = signalStart2 + F1size / 2 - bitLen / 2 + bitLen / 4;
             signalEnd2 = signalEnd2 + F1size / 2 - bitLen / 2 - bitLen / 4;
+
+            // SNR calculation layout:
+            // 16 bits of noise, 32 + 4 bits skipped, 24 bits of train sequence
+            int noisePowerStart = signalStart2 - (32 + 16) * bitLen - F1size / 2;
+            int trainPowerStart = signalStart2 + 4 * bitLen - F1size / 2;
+            int noisePowerEnd = noisePowerStart + 16 * bitLen;
+            int trainPowerEnd = trainPowerStart + 24 * bitLen;
+            double noisePower = 0.0;
+            double trainPower = 0.0;
+            if (noisePowerStart < 0 || trainPowerEnd >= D2.Length)
+                throw new SignalException("Not enough data for SNR calculation");
+            for (int i = noisePowerStart; i < noisePowerEnd; i++)
+                noisePower += D2[i] * D2[i];
+            for (int i = trainPowerStart; i < trainPowerEnd; i++)
+                trainPower += D2[i] * D2[i];
+            noisePower /= 16;
+            trainPower /= 24;
+            snr = 99;
+            if (noisePower != 0.0)
+                snr = Math.Round(10 * Math.Log10((trainPower - noisePower) / noisePower));
 
             double[] D2s = new double[signalEnd2 - signalStart2];
             for (int i = 0; i < D2s.Length; i++)
@@ -159,7 +176,7 @@ namespace SoundReceiver
 
 
             double estBitrate = bitrate * estFreq / freq;
-            int decFactor = (int)(sampleRate / estBitrate / 4);
+            int decFactor = (int)(sampleRate / estBitrate / 3);
             int decFilterSize = decFactor == 1 ? 0 : (int)(8 * sampleRate / estBitrate) | 1;
             double decSampleRate = (double)sampleRate / decFactor;
             double estBitlen = decSampleRate / estBitrate;
@@ -171,7 +188,8 @@ namespace SoundReceiver
             if (debug) SaveWav("trainSignal.wav", SignalDtoS(Mul(trainSignal, 0.67)));
 
             double[] rrc = Mul(MakeRootRaisedCosine(
-                estBitlen, recvRrcBitCount, rrcBeta), 1 / estBitlen);
+                (int)(recvRrcBitCount * estBitlen) | 1,
+                estBitlen, rrcBeta), 1 / estBitlen);
 
             if (debug) SaveWav("rrc.wav", SignalDtoS(rrc));
 
@@ -195,17 +213,18 @@ namespace SoundReceiver
                 D35 = Decimate(flt, D35, decFactor);
             }
 
+            if (debug)
+            {
+                double[] D35I = D35.Select(x => x.Real).ToArray();
+                double[] D35Q = D35.Select(x => x.Imaginary).ToArray();
 
-            double[] D35I = D35.Select(x => x.Real).ToArray();
-            double[] D35Q = D35.Select(x => x.Imaginary).ToArray();
+                double maxAbsI = MaxAbs(D35I);
+                double maxAbsQ = MaxAbs(D35Q);
+                double maxAbsIQ = Math.Max(maxAbsI, maxAbsQ);
 
-            double maxAbsI = MaxAbs(D35I);
-            double maxAbsQ = MaxAbs(D35Q);
-            double maxAbsIQ = Math.Max(maxAbsI, maxAbsQ);
-
-            if (debug) SaveWav("d35i.wav", SignalDtoS(Mul(D35I, 1.0 / maxAbsIQ)), (int)decSampleRate);
-            if (debug) SaveWav("d35q.wav", SignalDtoS(Mul(D35Q, 1.0 / maxAbsIQ)), (int)decSampleRate);
-
+                SaveWav("d35i.wav", SignalDtoS(Mul(D35I, 1.0 / maxAbsIQ)), (int)decSampleRate);
+                SaveWav("d35q.wav", SignalDtoS(Mul(D35Q, 1.0 / maxAbsIQ)), (int)decSampleRate);
+            }
 
             int trainOffset1 = Convert.ToInt32(estBitlen * 0.5 + eqSize / 2 + rrc.Length / 2);
             int trainSize1 = Convert.ToInt32(estBitlen * (equalizerTrainSequence.Length - 1));
@@ -215,7 +234,7 @@ namespace SoundReceiver
             int deltaRange = Convert.ToInt32(estBitlen / 2);
 
             Complex[,] r = ToeplitzMatrix(
-                D35.Skip(trainOffset1 + eqSize - 1).Take(trainSize1 - eqSize + 1).ToArray(),
+                D35.Skip(trainOffset1 + eqSize - 1).Take(trainSize2).ToArray(),
                 D35.Skip(trainOffset1).Take(eqSize).Reverse().ToArray());
             Complex[,] s = ToeplitzMatrix(
                 ToComplex(trainSignal.Skip(trainOffset4 + deltaRange).Take(trainSize2).ToArray()),
@@ -240,45 +259,70 @@ namespace SoundReceiver
 
             var D35If = D35f.Select(x => x.Real).ToArray();
             var D35Qf = D35f.Select(x => x.Imaginary).ToArray();
-            var D35If2 = Convolution(rrc, D35If);
-            var D35Qf2 = Convolution(rrc, D35Qf);
 
             if (debug) SaveWav("d35if.wav", SignalDtoS(Mul(D35If, 0.25)), (int)decSampleRate);
             if (debug) SaveWav("d35qf.wav", SignalDtoS(Mul(D35Qf, 0.25)), (int)decSampleRate);
 
-            if (debug) SaveWav("d35if2.wav", SignalDtoS(Mul(D35If2, 0.25)), (int)decSampleRate);
-            if (debug) SaveWav("d35qf2.wav", SignalDtoS(Mul(D35Qf2, 0.25)), (int)decSampleRate);
+            int debugInterpolationFactor = 8;
+
+            double[] D35If2 = null;
+            double[] D35Qf2 = null;
+
+            if (debug)
+            {
+                double[] debugRrc = Mul(MakeRootRaisedCosine(
+                    (rrc.Length - 1) * debugInterpolationFactor + 1,
+                    estBitlen * debugInterpolationFactor,
+                    rrcBeta), 1 / estBitlen);
+
+                D35If2 = Convolution(debugRrc, StuffZeroes(D35If, debugInterpolationFactor));
+                D35Qf2 = Convolution(debugRrc, StuffZeroes(D35Qf, debugInterpolationFactor));
+
+                SaveWav("d35if2.wav", SignalDtoS(Mul(D35If2, 0.25)),
+                    (int)(decSampleRate * debugInterpolationFactor));
+                SaveWav("d35qf2.wav", SignalDtoS(Mul(D35Qf2, 0.25)),
+                    (int)(decSampleRate * debugInterpolationFactor));
+            }
 
             var bits = new List<bool>();
+            var bitMER = new List<double>();
             var bitLevels = new List<double>();
-            double[] D4 = new double[(D35If2.Length + 1/*<--hack*/) * decFactor];
-            double tf = minadpi;
-            for (;;)
+
+            double[] D4 = null;
+            if (debug)
+                D4 = new double[D35If2.Length];
+            for (double tf = minadpi; tf < D35f.Length - rrc.Length + 1; tf += estBitlen)
             {
                 int ti = (int)tf;
                 double ts = tf - ti;
 
-                if (ti >= D35If2.Length)
-                    break;
-
                 double[] rrcSubsample = MakeRootRaisedCosine(
-                    estBitlen, recvRrcBitCount, rrcBeta, ts);
+                    (int)(recvRrcBitCount * estBitlen) | 1,
+                    estBitlen, rrcBeta, ts);
 
-                double sample = Convolution(
-                    rrcSubsample, D35If, ti) / estBitlen;
+                Complex sample = Convolution(rrcSubsample, D35f, ti) / estBitlen;
 
-                bool bit = sample > 0.0;
-                bits.Add(bit);
+                double di = 1.0 - Math.Abs(sample.Real);
+                double dq = 0.0 - sample.Imaginary;
+                bitMER.Add(di * di + dq * dq);
 
-                double bitLevel = Math.Abs(sample);
-                var ti2 = (int)Math.Round(tf * decFactor);
-                D4[ti2] = (bit ? 1.0 : -1.0) * bitLevel;
-                bitLevels.Add(bitLevel);
+                bits.Add(sample.Real > 0.0);
+                bitLevels.Add(Math.Abs(sample.Real));
 
-                tf += decSampleRate / estBitrate;
+                if (debug)
+                {
+                    int ti2 = Convert.ToInt32(tf * debugInterpolationFactor);
+                    if (ti2 == D4.Length)
+                        ti2--;
+                    D4[ti2] = sample.Real;
+                }
             }
 
-            if (debug) SaveWav("d4.wav", SignalDtoS(Mul(D4, 0.25)));
+            if (debug) SaveWav("d4.wav", SignalDtoS(Mul(D4, 0.25)),
+                (int)(decSampleRate * debugInterpolationFactor));
+
+            if (bits.Count < equalizerTrainSequence.Length + payloadSizeLsbSize)
+                throw new SignalException("Wrong packet format");
 
             bool[] plszlsbb = bits.Skip(equalizerTrainSequence.Length).Take(payloadSizeLsbSize).ToArray();
             int plszlsb = 0;
@@ -287,15 +331,15 @@ namespace SoundReceiver
 
             int plszEst = (bits.Count - equalizerTrainSequence.Length - payloadSizeLsbSize) / 8;
             int plsz = plszEst;
-            // TODO: implement support for other payloadSizeLsbSize values
-            int plszEstLsb = plszEst & 7;
+            int lsbMask = (1 << payloadSizeLsbSize) - 1;
+            int plszEstLsb = plszEst & lsbMask;
             if (plszEstLsb != plszlsb)
             {
-                plsz &= ~7;
+                plsz &= ~lsbMask;
                 plsz |= plszlsb;
                 if (plszEstLsb < plszlsb)
                 {
-                    plsz -= 8;
+                    plsz -= 1 << payloadSizeLsbSize;
                     if (plsz < 0)
                         throw new SignalException("Wrong payload size");
                 }
@@ -305,10 +349,13 @@ namespace SoundReceiver
                 equalizerTrainSequence.Length - payloadSizeLsbSize - plsz * 8;
 
             bits.RemoveRange(bitLevels.Count - skippedBitCount, skippedBitCount);
+            bitMER.RemoveRange(bitLevels.Count - skippedBitCount, skippedBitCount);
             bitLevels.RemoveRange(bitLevels.Count - skippedBitCount, skippedBitCount);
             //bitLevelMin = (int)(bitLevels.Min() * 100.0);
 
             bitLevelsDiagram.Fill(bitLevels.ToArray(), 0.001, 2.0, 39);
+
+            mer = Math.Round(Math.Log10(bitMER.Count() / bitMER.Sum()) * 10);
 
             if (!bits.Take(equalizerTrainSequence.Length).
                 SequenceEqual(equalizerTrainSequence.Select(b => b == 1)))
@@ -327,11 +374,9 @@ namespace SoundReceiver
 
         double EstimateFrequency(double[] signal, double freq1, double freq2)
         {
-            double[] signalp2 = signal.Take(
-                1 << (int)Math.Log(signal.Length, 2)).ToArray();
-
-            var n = signalp2.Length;
-            var signalp2c = DitFft2(PadLeft(n * 3, signalp2)).ToArray();
+            var n = 1 << (int)Math.Log(signal.Length - 1, 2) + 1;
+            var signalp2c = fourier.Transform(
+                PadLeft(n * 4 - signal.Length, signal)).ToArray();
 
             double[] signalp2a = new double[signalp2c.Length];
             for (int k = 0; k < signalp2a.Length; k++)
@@ -362,53 +407,6 @@ namespace SoundReceiver
             var wa = (vp1 - vm1) / (u * (vp1 + vm1) + v * vz);
 
             return ((double)maxPos / n + wa) * sampleRate / 4;
-        }
-
-        Complex[] Fourier(double[] signal, int size, int ofs, int stride)
-        {
-            var result = new Complex[size];
-            double step = 2 * Math.PI / size;
-
-            for (int k = 0; k < size; k++)
-            {
-                double si = 0.0;
-                double sq = 0.0;
-                double stepk = step * k;
-                for (int n = 0; n < size; n++)
-                {
-                    double stepkn = stepk * n;
-                    double sv = signal[stride * n + ofs];
-                    si += sv * Math.Cos(stepkn);
-                    sq -= sv * Math.Sin(stepkn);
-                }
-                result[k] = new Complex(si, sq);
-            }
-            return result;
-        }
-
-        Complex[] DitFft2(double[] signal, int size, int ofs, int s)
-        {
-            var result = new Complex[size];
-            if (size <= 4)
-                result = Fourier(signal, size, ofs, s);
-            else
-            {
-                var step = -2.0 * Math.PI * Complex.ImaginaryOne / size;
-                var p1 = DitFft2(signal, size / 2, ofs, s * 2);
-                var p2 = DitFft2(signal, size / 2, ofs + s, s * 2);
-                for (int k = 0; k < size / 2; k++)
-                {
-                    var e = Complex.Exp(step * k);
-                    result[k] = p1[k] + e * p2[k];
-                    result[k + size / 2] = p1[k] - e * p2[k];
-                }
-            }
-            return result;
-        }
-
-        Complex[] DitFft2(double[] signal)
-        {
-            return DitFft2(signal, signal.Length, 0, 1);
         }
 
         double[] MakePulsesShape(sbyte[] symbols,
@@ -458,15 +456,14 @@ namespace SoundReceiver
             }
         }
 
-        double[] MakeRootRaisedCosine(double bitDuration,
-            int bitCount, double beta, double subsampleShift = 0.0)
+        double[] MakeRootRaisedCosine(int filterSize,
+            double bitDuration, double beta, double subsampleShift = 0.0)
         {
-            int signalLen = (int)(bitCount * bitDuration) | 1;
-            double[] rootRaisedCosine = new double[signalLen];
-            for (int i = 0; i < signalLen; i++)
+            double[] rootRaisedCosine = new double[filterSize];
+            for (int i = 0; i < filterSize; i++)
             {
                 rootRaisedCosine[i] = RootRaisedCosine(
-                    i - signalLen / 2 - subsampleShift, bitDuration, beta);
+                    i - filterSize / 2 - subsampleShift, bitDuration, beta);
             }
             return rootRaisedCosine;
         }
@@ -527,9 +524,9 @@ namespace SoundReceiver
             return r;
         }
 
-        double Convolution(double[] kernel, double[] signal, int signalOffset)
+        Complex Convolution(double[] kernel, Complex[] signal, int signalOffset)
         {
-            double r = 0.0;
+            Complex r = Complex.Zero;
             for (int i = 0; i < kernel.Length; i++)
                 r += kernel[i] * signal[signalOffset + i];
             return r;
@@ -551,6 +548,26 @@ namespace SoundReceiver
                 for (int k = 0; k < filter.Length; k++)
                     sum += filter[k] * signal[i * factor + k];
                 result[i] = sum;
+            }
+            return result;
+        }
+
+        double[] StuffZeroes(double[] signal, int factor)
+        {
+            if (factor <= 0)
+                throw new Exception();
+            if (factor == 1)
+                return signal;
+            if (signal.Length == 0)
+                return signal;
+
+            int ptr = 0;
+            double[] result = new double[signal.Length * factor];
+            for (int i = 0; i < signal.Length; i++)
+            {
+                result[ptr++] = signal[i];
+                for (int j = 1; j < factor; j++)
+                    result[ptr++] = 0.0;
             }
             return result;
         }
@@ -631,32 +648,6 @@ namespace SoundReceiver
             return gaussian;
         }
 
-        double Lerp(double[] Signal, double X)
-        {
-            double F1 = Math.Floor(X);
-            double F2 = F1 + 1;
-            double F3 = F2 - X;
-            double F4 = X - F1;
-
-            int IF1 = (int)F1;
-            int IF2 = IF1 + 1;
-
-            double V1 = 0;
-            double V2 = 0;
-            if (IF1 >= 0)
-                if (IF1 < Signal.Length)
-                {
-                    V1 = Signal[IF1];
-                    if (F4 == 0)
-                        return V1;
-                }
-            if (IF2 >= 0)
-                if (IF2 < Signal.Length)
-                    V2 = Signal[IF2];
-
-            return V1 * F3 + V2 * F4;
-        }
-
         void MinMax(double[] a, int w, double[] minval, double[] maxval)
         {
             LinkedList<int> U = new LinkedList<int>();
@@ -698,8 +689,6 @@ namespace SoundReceiver
                     }
                 }
             }
-            maxval[a.Length - w] = a[U.Count > 0 ? U.First.Value : a.Length - 1];
-            minval[a.Length - w] = a[L.Count > 0 ? L.First.Value : a.Length - 1];
         }
 
         double[] Abs(double[] signal)
@@ -731,58 +720,25 @@ namespace SoundReceiver
             return r;
         }
 
-        double[] Integrate(double[] Signal, double SampleCount)
+        double[] Integrate(double[] src, int sampleCount)
         {
-            double S = 0;
-            double[] R = new double[Signal.Length];
+            if (sampleCount < 2)
+                return src;
 
-            for (int i = 0; i < R.Length; i++)
+            double[] result = new double[src.Length];
+            double[] buf = new double[sampleCount];
+            int bufPtr = 0;
+            double sum = 0.0;
+
+            for (int i = 0; i < src.Length; i++)
             {
-                S += Integrate(Signal, i, i + 1);
-                S -= Integrate(Signal, i - SampleCount, i - SampleCount + 1);
-                R[i] = S / SampleCount;
+                sum -= buf[bufPtr];
+                buf[bufPtr] = src[i];
+                sum += src[i];
+                bufPtr = (bufPtr + 1) % sampleCount;
+                result[i] = sum / sampleCount;
             }
-            return R;
-        }
-
-        double Integrate(double[] Signal, double StartSample, double EndSample)
-        {
-            if (StartSample >= EndSample)
-                return 0;
-
-            double SF = Math.Floor(StartSample);
-            double EF = Math.Floor(EndSample);
-
-            if (SF == EF)
-            {
-                double V1 = Lerp(Signal, StartSample);
-                double V2 = Lerp(Signal, EndSample);
-                double V = (EndSample - StartSample) * (V2 + V1) / 2;
-                return V;
-            }
-            else
-            {
-                double V1 = Lerp(Signal, StartSample);
-                double V2 = Lerp(Signal, SF + 1);
-                double V3 = (SF - StartSample + 1) * (V2 + V1) / 2;
-
-                double V4 = Lerp(Signal, EF);
-                double V5 = Lerp(Signal, EndSample);
-                double V6 = (EndSample - EF) * (V4 + V5) / 2;
-
-                double V = V3 + V6;
-
-                int C = (int)(EF - SF - 1);
-                for (int i = 0; i < C; i++)
-                {
-                    double VI1 = Lerp(Signal, SF + 1);
-                    double VI2 = Lerp(Signal, SF + 2);
-                    double VI3 = (VI1 + VI2) / 2;
-                    V += VI3;
-                }
-
-                return V;
-            }
+            return result;
         }
 
         double[] Normalize(double[] signal)
