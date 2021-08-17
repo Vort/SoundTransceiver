@@ -90,7 +90,7 @@ namespace SoundReceiver
             {
                 StringBuilder sb = new StringBuilder();
                 byte[] data = detector.Detect(
-                    buf.ToArray(), bitLevels, ref snr, ref mer);
+                    buf.ToArray(), bitLevels, out snr, out mer);
                 string unfiltered = Encoding.UTF8.GetString(data);
                 foreach (char c in unfiltered)
                     sb.Append(c < ' ' ? '�' : c);

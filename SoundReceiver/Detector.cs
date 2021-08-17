@@ -44,7 +44,7 @@ namespace SoundReceiver
             fourier = new Fourier();
         }
 
-        public byte[] Detect(short[] signal, List<double> bitLevels, ref double? snr, ref double? mer)
+        public byte[] Detect(short[] signal, List<double> bitLevels, out double? snr, out double? mer)
         {
             if (signal.Length == 0)
                 throw new SignalException("No data");
@@ -64,9 +64,12 @@ namespace SoundReceiver
             double[] D2 = Convolution(F1, D1);
             if (debug) SaveWav("d2.wav", SignalDtoS(Normalize(D2)));
 
-            double[] D21 = Abs(D2);
-
             int bitLen = (int)(sampleRate / bitrate);
+
+            double[] D21 = Abs(D2);
+            int delay = bitLen / 2;
+            for (int i = 0; i < D21.Length - delay; i++)
+                D21[i] = Math.Max(D21[i], D21[i + delay]);
 
             const int integrateBitCount = 16;
 
@@ -155,6 +158,8 @@ namespace SoundReceiver
             trainPower /= 24;
             if (noisePower != 0.0 && trainPower > noisePower)
                 snr = Math.Round(10 * Math.Log10((trainPower - noisePower) / noisePower));
+            else
+                snr = null;
 
             double[] D2s = new double[signalEnd2 - signalStart2];
             for (int i = 0; i < D2s.Length; i++)
