@@ -39,16 +39,12 @@ namespace SoundReceiver
 
         Fourier fourier;
 
-        Diagram bitLevelsDiagram;
-
-
-        public Detector(Diagram bitLevelsDiagram)
+        public Detector()
         {
             fourier = new Fourier();
-            this.bitLevelsDiagram = bitLevelsDiagram;
         }
 
-        public byte[] Detect(short[] signal, out double snr, out double mer)
+        public byte[] Detect(short[] signal, List<double> bitLevels, ref double? snr, ref double? mer)
         {
             if (signal.Length == 0)
                 throw new SignalException("No data");
@@ -72,14 +68,16 @@ namespace SoundReceiver
 
             int bitLen = (int)(sampleRate / bitrate);
 
+            const int integrateBitCount = 16;
+
             double[] D22 = Integrate(D21, bitLen);
             //if (debug) SaveWav("d22.wav", SignalDtoS(Normalize(D22)));
-            double[] D23 = Integrate(D21, bitLen * 8);
+            double[] D23 = Integrate(D21, bitLen * integrateBitCount);
             //if (debug) SaveWav("d23.wav", SignalDtoS(D23));
 
-            double[] D24 = new double[D22.Length - bitLen * 8];
-            double[] D25 = new double[D22.Length - bitLen * 8];
-            MinMax(D22, bitLen * 8, D24, D25);
+            double[] D24 = new double[D22.Length - bitLen * integrateBitCount];
+            double[] D25 = new double[D22.Length - bitLen * integrateBitCount];
+            MinMax(D22, bitLen * integrateBitCount, D24, D25);
 
             //if (debug) SaveWav("d24.wav", SignalDtoS(D24));
             //if (debug) SaveWav("d25.wav", SignalDtoS(D25));
@@ -88,7 +86,7 @@ namespace SoundReceiver
             double noiseLevel = 0.0;
             int signalStart = 0;
             int signalEnd = 0;
-            for (int i = bitLen * 8; i < D24.Length; i++)
+            for (int i = bitLen * integrateBitCount; i < D24.Length; i++)
             {
                 if ((signalStart == 0) &&
                     (D24[i] > 2.0 * D23[i]))
@@ -114,7 +112,7 @@ namespace SoundReceiver
 
             int signalStart2 = 0;
             int signalEnd2 = 0;
-            double signalAvgMin = D24[signalCenter - bitLen * 4];
+            double signalAvgMin = D24[signalCenter - bitLen * integrateBitCount / 2];
             for (int i = signalStart; i < signalEnd; i++)
             {
                 if ((signalStart2 == 0) &&
@@ -155,8 +153,7 @@ namespace SoundReceiver
                 trainPower += D2[i] * D2[i];
             noisePower /= 16;
             trainPower /= 24;
-            snr = 99;
-            if (noisePower != 0.0)
+            if (noisePower != 0.0 && trainPower > noisePower)
                 snr = Math.Round(10 * Math.Log10((trainPower - noisePower) / noisePower));
 
             double[] D2s = new double[signalEnd2 - signalStart2];
@@ -286,7 +283,6 @@ namespace SoundReceiver
 
             var bits = new List<bool>();
             var bitMER = new List<double>();
-            var bitLevels = new List<double>();
 
             double[] D4 = null;
             if (debug)
@@ -352,8 +348,6 @@ namespace SoundReceiver
             bitMER.RemoveRange(bitLevels.Count - skippedBitCount, skippedBitCount);
             bitLevels.RemoveRange(bitLevels.Count - skippedBitCount, skippedBitCount);
             //bitLevelMin = (int)(bitLevels.Min() * 100.0);
-
-            bitLevelsDiagram.Fill(bitLevels.ToArray(), 0.001, 2.0, 39);
 
             mer = Math.Round(Math.Log10(bitMER.Count() / bitMER.Sum()) * 10);
 

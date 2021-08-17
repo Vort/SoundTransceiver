@@ -10,7 +10,7 @@ namespace SoundReceiver
 {
     public partial class MainWindow : Window
     {
-        List<short> m_Buf;
+        List<short> buf;
         WaveIn waveIn;
 
         Detector detector;
@@ -22,7 +22,7 @@ namespace SoundReceiver
             InitializeComponent();
 
             bitLevelsDiagram = new Diagram(Canvas1);
-            detector = new Detector(bitLevelsDiagram);
+            detector = new Detector();
 
             waveIn = new WaveIn();
             waveIn.WaveFormat = new WaveFormat(44100, 1);
@@ -38,7 +38,7 @@ namespace SoundReceiver
         private void waveIn_DataAvailable(object sender, WaveInEventArgs e)
         {
             for (int i = 0; i < e.BytesRecorded / 2; i++)
-                m_Buf.Add(BitConverter.ToInt16(e.Buffer, i * 2));
+                buf.Add(BitConverter.ToInt16(e.Buffer, i * 2));
         }
 
         void UpdateParamInfo()
@@ -67,10 +67,7 @@ namespace SoundReceiver
                 BitrateSlider.IsEnabled = false;
                 StartButton.IsEnabled = false;
                 StopButton.IsEnabled = true;
-                MessageTextBox.Text = "";
-                SNRTextBlock.Text = "—";
-                MERTextBlock.Text = "—";
-                m_Buf = new List<short>();
+                buf = new List<short>();
             }
             catch
             {
@@ -85,33 +82,32 @@ namespace SoundReceiver
 
         void ProcessSignal()
         {
-            string snrS = "—";
-            string merS = "—";
             string resultStr = "";
+            double? snr = null;
+            double? mer = null;
+            var bitLevels = new List<double>();
             try
             {
-                double snr;
-                double mer;
                 StringBuilder sb = new StringBuilder();
-                byte[] data = detector.Detect(m_Buf.ToArray(), out snr, out mer);
+                byte[] data = detector.Detect(
+                    buf.ToArray(), bitLevels, ref snr, ref mer);
                 string unfiltered = Encoding.UTF8.GetString(data);
                 foreach (char c in unfiltered)
                     sb.Append(c < ' ' ? '�' : c);
                 resultStr = sb.ToString();
-                snrS = $"{snr,2} dB";
-                merS = $"{mer,2} dB";
             }
             catch (SignalException e)
             {
                 resultStr = string.Format("[{0}]", e.Message);
             }
+            bitLevelsDiagram.Fill(bitLevels.ToArray(), 0.001, 2.0, 39);
 
             Dispatcher.Invoke(
                 DispatcherPriority.Normal,
                 new Action(() =>
                 {
-                    SNRTextBlock.Text = snrS;
-                    MERTextBlock.Text = merS;
+                    SNRTextBlock.Text = snr == null ? "—" : $"{snr,2} dB";
+                    MERTextBlock.Text = mer == null ? "—" : $"{mer,2} dB";
                     MessageTextBox.Text = resultStr;
 
                     FreqSlider.IsEnabled = true;

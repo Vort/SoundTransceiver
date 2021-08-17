@@ -21,7 +21,7 @@
         <TextBlock Grid.Row="1" Grid.Column="0" Text="Bitrate:" />
         <TextBlock Grid.Row="3" Grid.Column="0" Text="Message:" VerticalAlignment="Center" />
 
-        <TextBox Grid.Row="3" Grid.Column="1" Name="MessageTextBox" VerticalAlignment="Center" TextChanged="MessageTextBox_TextChanged" Margin="0,0,24,0">Hello, World!</TextBox>
+        <TextBox Grid.Row="3" Grid.Column="1" Name="MessageTextBox" VerticalAlignment="Center" TextChanged="MessageTextBox_TextChanged" Margin="0,0,24,0">Hello, world!</TextBox>
 
         <TextBlock Grid.Row="0" Grid.Column="2" Name="FreqTextBlock" Text="1000 Hz" FontWeight="Bold" />
         <TextBlock Grid.Row="1" Grid.Column="2" Name="BitrateTextBlock" Text="100 bps" FontWeight="Bold" />

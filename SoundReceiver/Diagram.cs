@@ -9,20 +9,20 @@ namespace SoundReceiver
 {
     class Diagram
     {
-        Canvas m_C;
+        Canvas canvas;
 
-        public Diagram(Canvas C)
+        public Diagram(Canvas canvas)
         {
-            m_C = C;
+            this.canvas = canvas;
         }
 
         public void Fill(double[] Data, double L1, double L2, int Count)
         {
-            m_C.Dispatcher.Invoke(
+            canvas.Dispatcher.Invoke(
                 DispatcherPriority.Normal,
                 new Action(() => 
                 {
-                    m_C.Children.Clear();
+                    canvas.Children.Clear();
 
                     double DL1 = L2 - L1;
                     double DL2 = DL1 / Count + 0.0001;
@@ -53,7 +53,7 @@ namespace SoundReceiver
                         R.SetValue(Canvas.LeftProperty, i * 10.0 + 1.0);
                         R.SetValue(Canvas.TopProperty, 100.0 - R.Height);
 
-                        m_C.Children.Add(R);
+                        canvas.Children.Add(R);
                     }
                 }));
         }
