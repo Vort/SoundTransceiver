@@ -51,8 +51,6 @@ namespace SoundReceiver
 
             bool debug = false;
 
-            SaveWav($"r_{carrierFreq}_{bitrate}.wav", signal);
-
             double[] D1 = SignalStoD(signal);
 
             double bandwidth = (1 + rrcBeta) * bitrate;
@@ -951,7 +949,7 @@ namespace SoundReceiver
             return signalS;
         }
 
-        void SaveWav(string path, short[] signal, int sampleRate = sampleRate)
+        public static void SaveWav(string path, short[] signal, int sampleRate = sampleRate)
         {
             FileStream fs = File.Open(path, FileMode.Create);
             fs.Write(new byte[] { 0x52, 0x49, 0x46, 0x46 }, 0, 4); // "RIFF"

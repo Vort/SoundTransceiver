@@ -5,11 +5,14 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Windows.Threading;
 using NAudio.Wave;
+using System.Windows.Input;
 
 namespace SoundReceiver
 {
     public partial class MainWindow : Window
     {
+        bool createWavFile;
+
         List<short> buf;
         WaveIn waveIn;
 
@@ -76,6 +79,8 @@ namespace SoundReceiver
 
         void StopButton_Click(object sender, RoutedEventArgs e)
         {
+            createWavFile = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+
             waveIn.StopRecording();
             StopButton.IsEnabled = false;
         }
@@ -88,9 +93,16 @@ namespace SoundReceiver
             var bitLevels = new List<double>();
             try
             {
+                short[] bufA = buf.ToArray();
+                if (createWavFile)
+                {
+                    string ts = DateTime.Now.ToString("yyyyMMddHHmmss");
+                    Detector.SaveWav(
+                        $"r_{ts}_{detector.carrierFreq}_{detector.bitrate}.wav", bufA);
+                }
+                byte[] data = detector.Detect(bufA, bitLevels, out snr, out mer);
+
                 StringBuilder sb = new StringBuilder();
-                byte[] data = detector.Detect(
-                    buf.ToArray(), bitLevels, out snr, out mer);
                 string unfiltered = Encoding.UTF8.GetString(data);
                 foreach (char c in unfiltered)
                     sb.Append(c < ' ' ? '�' : c);
