@@ -401,7 +401,8 @@ namespace SoundReceiver
             var vz = signalp2a[maxPos];
             var vp1 = signalp2a[maxPos + 1];
 
-            var u = (64 * n) / (Math.Pow(Math.PI, 5) + 32 * Math.PI);
+            var u = (64.0 * signal.Length * signal.Length / n) /
+                (Math.Pow(Math.PI, 5) + 32 * Math.PI);
             var v = u * Math.Pow(Math.PI, 2) / 4;
             var wa = (vp1 - vm1) / (u * (vp1 + vm1) + v * vz);
 
