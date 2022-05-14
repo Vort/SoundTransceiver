@@ -1,11 +1,12 @@
-﻿using System;
-using System.Text;
-using System.Windows;
-using System.Collections.Generic;
-using System.Threading;
-using System.Windows.Threading;
+﻿using NAudio;
 using NAudio.Wave;
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Threading;
+using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace SoundReceiver
 {
@@ -24,13 +25,9 @@ namespace SoundReceiver
         {
             InitializeComponent();
 
+            buf = new List<short>();
             bitLevelsDiagram = new Diagram(Canvas1);
             detector = new Detector();
-
-            waveIn = new WaveIn();
-            waveIn.WaveFormat = new WaveFormat(44100, 1);
-            waveIn.DataAvailable += waveIn_DataAvailable;
-            waveIn.RecordingStopped += waveIn_RecordingStopped;
         }
 
         private void waveIn_RecordingStopped(object sender, StoppedEventArgs e)
@@ -64,16 +61,25 @@ namespace SoundReceiver
         {
             try
             {
+                buf.Clear();
+
+                // WaveIn needs to be reinitialized each time:
+                // https://github.com/naudio/NAudio/issues/49#issuecomment-280446686
+                waveIn = new WaveIn();
+                waveIn.WaveFormat = new WaveFormat(44100, 1);
+                waveIn.DataAvailable += waveIn_DataAvailable;
+                waveIn.RecordingStopped += waveIn_RecordingStopped;
                 waveIn.StartRecording();
 
                 FreqSlider.IsEnabled = false;
                 BitrateSlider.IsEnabled = false;
                 StartButton.IsEnabled = false;
                 StopButton.IsEnabled = true;
-                buf = new List<short>();
             }
-            catch
+            catch (MmException ex)
             {
+                if (ex.Result == MmResult.BadDeviceId)
+                    MessageTextBox.Text = "[Recording device is not found]";
             }
         }
 
@@ -82,6 +88,7 @@ namespace SoundReceiver
             createWavFile = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
 
             waveIn.StopRecording();
+            waveIn = null;
             StopButton.IsEnabled = false;
         }
 
