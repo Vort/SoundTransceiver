@@ -21,11 +21,17 @@
         <TextBlock Grid.Row="1" Grid.Column="0" Text="Bitrate:" />
         <TextBlock Grid.Row="3" Grid.Column="0" Text="Message:" VerticalAlignment="Center" />
 
-        <TextBox Grid.Row="3" Grid.Column="1" Name="MessageTextBox" VerticalAlignment="Center" TextChanged="MessageTextBox_TextChanged" Margin="0,0,24,0">Hello, world!</TextBox>
-
         <TextBlock Grid.Row="0" Grid.Column="2" Name="FreqTextBlock" Text="1000 Hz" FontWeight="Bold" />
         <TextBlock Grid.Row="1" Grid.Column="2" Name="BitrateTextBlock" Text="100 bps" FontWeight="Bold" />
-
-        <Button Grid.Row="3" Grid.Column="2" Name="SendButton" Margin="-16,4,4,4" Click="SendButton_Click" IsDefault="True">Send</Button>
+        <Grid Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="40" />
+                <ColumnDefinition Width="76" />
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Row="0" Grid.Column="0" x:Name="MessageTextBox" VerticalAlignment="Center" TextChanged="MessageTextBox_TextChanged" Text="Hello, world!"/>
+            <TextBlock Name="TransmissionDuration" ToolTip="Transmission duration" Grid.Row="0" Grid.Column="1" Margin="4,0,0,0" Text="0.0 s" VerticalAlignment="Center" />
+            <Button Grid.Row="0" Grid.Column="2" Margin="4,4,4,4" x:Name="SendButton" Click="SendButton_Click" IsDefault="True" Content="Send"/>
+        </Grid>
     </Grid>
 </Window>

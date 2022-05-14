@@ -24,20 +24,24 @@ namespace SoundTransmitter
             1, -1, 1, -1, -1, 1, 1, -1,
             -1, -1, -1, 1, -1, -1, -1, -1
         };
-        int sendRrcBitCount = 64;
-        double rrcBeta = 0.8;
+        const int sendRrcBitCount = 64;
+        const double rrcBeta = 0.8;
 
-        int payloadSizeLsbSize = 3;
+        const int payloadSizeLsbSize = 3;
+
+        double[] silence;
 
         string message;
 
 
         public MainWindow()
         {
+            silence = MakeSilence(0.1);
             InitializeComponent();
+            UpdateTransmissionDuration();
         }
 
-        void UpdateParamInfo()
+        private void Slider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (FreqTextBlock == null)
                 return;
@@ -48,17 +52,17 @@ namespace SoundTransmitter
             BitrateTextBlock.Text = bitrate.ToString() + " bps";
 
             SendButton.IsEnabled = MessageTextBox.Text.Length != 0;
-        }
-
-        private void Slider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            UpdateParamInfo();
+            if (sender == BitrateSlider)
+                UpdateTransmissionDuration();
         }
 
         private void MessageTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (SendButton != null)
+            {
                 SendButton.IsEnabled = MessageTextBox.Text.Length != 0;
+                UpdateTransmissionDuration();
+            }
         }
 
         private void SendButton_Click(object sender, RoutedEventArgs e)
@@ -72,6 +76,16 @@ namespace SoundTransmitter
             new Thread(MakeSignal).Start();
         }
 
+        void UpdateTransmissionDuration()
+        {
+            int payloadBitCount = Encoding.UTF8.GetBytes(MessageTextBox.Text).Length * 8;
+            int totalBitCount = payloadBitCount + payloadSizeLsbSize + equalizerTrainSequence.Length;
+            double duration = 
+                (totalBitCount + sendRrcBitCount - 1) / bitrate +
+                (double)silence.Length / sampleRate;
+            TransmissionDuration.Text = $"{duration:0.0} s";
+        }
+
         void MakeSignal()
         {
             var data = Encoding.UTF8.GetBytes(message);
@@ -81,10 +95,9 @@ namespace SoundTransmitter
                 sampleRate, bitrate, rrcBeta, sendRrcBitCount), 0.67);
             double[] aModSignal = AModulation(digitalSignal, carrierFreq);
             // Delay is needed to prevent mouse and keyboard noises from mixing with signal
-            double[] silence = MakeSilence(0.1);
             double[] result = silence.Concat(aModSignal).ToArray();
 
-            MemoryStream wav = MakeWav(SignalDtoS(result), 2);
+            MemoryStream wav = MakeWav(SignalDtoS(result, true), 2);
 
             SendButton.Dispatcher.Invoke(
                 DispatcherPriority.Normal,
@@ -205,14 +218,24 @@ namespace SoundTransmitter
             return modSignal;
         }
 
-
-
-        short[] SignalDtoS(double[] Signal)
+        short[] SignalDtoS(double[] signal, bool dither = false)
         {
-            short[] SignalS = new short[Signal.Length];
-            for (int i = 0; i < Signal.Length; i++)
-                SignalS[i] = (short)(Signal[i] * 32767.0);
-            return SignalS;
+            Random rnd = new Random(12345);
+            short[] signalS = new short[signal.Length];
+            if (dither)
+            {
+                for (int i = 0; i < signal.Length; i++)
+                {
+                    double r = (rnd.NextDouble() + rnd.NextDouble()) - 1;
+                    signalS[i] = Convert.ToInt16(signal[i] * 32766.0 + r);
+                }
+            }
+            else
+            {
+                for (int i = 0; i < signal.Length; i++)
+                    signalS[i] = Convert.ToInt16(signal[i] * 32767.0);
+            }
+            return signalS;
         }
 
         MemoryStream MakeWav(short[] signal, int channelCount, int sampleRate = sampleRate)
