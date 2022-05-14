@@ -1,10 +1,12 @@
 ﻿using System;
-using System.Windows;
-using System.Text;
-using System.Linq;
 using System.IO;
-using System.Windows.Threading;
+using System.Linq;
+using System.Media;
+using System.Text;
 using System.Threading;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace SoundTransmitter
 {
@@ -53,7 +55,7 @@ namespace SoundTransmitter
             UpdateParamInfo();
         }
 
-        private void MessageTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        private void MessageTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (SendButton != null)
                 SendButton.IsEnabled = MessageTextBox.Text.Length != 0;
@@ -78,30 +80,18 @@ namespace SoundTransmitter
             double[] digitalSignal = Mul(MakePulsesShape(symbols,
                 sampleRate, bitrate, rrcBeta, sendRrcBitCount), 0.67);
             double[] aModSignal = AModulation(digitalSignal, carrierFreq);
+            // Delay is needed to prevent mouse and keyboard noises from mixing with signal
             double[] silence = MakeSilence(0.1);
-            double[] result = silence.Concat(aModSignal).Concat(silence).ToArray();
+            double[] result = silence.Concat(aModSignal).ToArray();
 
-            string outName = string.Format("s_{0}_{1}.wav", carrierFreq, bitrate);
-            SaveWav(outName, SignalDtoS(result), 2);
+            MemoryStream wav = MakeWav(SignalDtoS(result), 2);
 
-            for (int i = 0; i < 3; i++)
-            {
-                SendButton.Dispatcher.Invoke(
-                    DispatcherPriority.Normal,
-                    new Action(() => { SendButton.Content = (3 - i); }));
-                Thread.Sleep(500);
-            }
             SendButton.Dispatcher.Invoke(
                 DispatcherPriority.Normal,
                 new Action(() => { SendButton.Content = "Play!"; }));
 
-
-            var Player = new System.Media.SoundPlayer();
-            Player.SoundLocation = outName;
+            var Player = new SoundPlayer(wav);
             Player.PlaySync();
-
-            File.Delete(outName);
-
 
             FreqSlider.Dispatcher.Invoke(
                 DispatcherPriority.Normal,
@@ -173,26 +163,27 @@ namespace SoundTransmitter
 
         double RootRaisedCosine(double t, double bitDuration, double beta)
         {
-            double epsilon = 1e-12;
+            const double epsilon = 1e-12;
+            double fourbeta = 4.0 * beta;
             if (Math.Abs(t) < epsilon)
             {
                 return 1.0 + beta * (4.0 / Math.PI - 1.0);
             }
-            else if (Math.Abs(Math.Abs(t) - bitDuration / (4.0 * beta)) > epsilon)
+            else if (Math.Abs(Math.Abs(t) - bitDuration / fourbeta) > epsilon)
             {
                 double f = t / bitDuration;
                 return (
                     Math.Sin((Math.PI * f) * (1.0 - beta)) +
-                    (4.0 * beta * f) *
+                    (fourbeta * f) *
                     Math.Cos((Math.PI * f) * (1.0 + beta))) /
                     ((Math.PI * f) *
-                    (1.0 - Math.Pow(4.0 * beta * f, 2.0)));
+                    (1.0 - fourbeta * fourbeta * f * f));
             }
             else
             {
                 return (beta / Math.Sqrt(2.0)) *
-                    ((1.0 + 2.0 / Math.PI) * Math.Sin(Math.PI / (4.0 * beta)) +
-                    (1.0 - 2.0 / Math.PI) * Math.Cos(Math.PI / (4.0 * beta)));
+                    ((1.0 + 2.0 / Math.PI) * Math.Sin(Math.PI / fourbeta) +
+                    (1.0 - 2.0 / Math.PI) * Math.Cos(Math.PI / fourbeta));
             }
         }
 
@@ -224,29 +215,30 @@ namespace SoundTransmitter
             return SignalS;
         }
 
-        void SaveWav(string path, short[] signal, int channelCount, int sampleRate = sampleRate)
+        MemoryStream MakeWav(short[] signal, int channelCount, int sampleRate = sampleRate)
         {
-            FileStream fs = File.Open(path, FileMode.Create);
-            fs.Write(new byte[] { 0x52, 0x49, 0x46, 0x46 }, 0, 4); // "RIFF"
-            fs.Write(BitConverter.GetBytes((uint)(36 + signal.Length * 2 * channelCount)), 0, 4);
-            fs.Write(new byte[] { 0x57, 0x41, 0x56, 0x45 }, 0, 4); // "WAVE"
-            fs.Write(new byte[] { 0x66, 0x6D, 0x74, 0x20 }, 0, 4); // "fmt"
-            fs.Write(BitConverter.GetBytes((uint)(16)), 0, 4);
-            fs.Write(BitConverter.GetBytes((ushort)(1)), 0, 2);
-            fs.Write(BitConverter.GetBytes((ushort)(channelCount)), 0, 2);
-            fs.Write(BitConverter.GetBytes((uint)(sampleRate)), 0, 4); // Hz
-            fs.Write(BitConverter.GetBytes((uint)(sampleRate * 2 * channelCount)), 0, 4);
-            fs.Write(BitConverter.GetBytes((ushort)(2 * channelCount)), 0, 2);
-            fs.Write(BitConverter.GetBytes((ushort)(16)), 0, 2); // bps
-            fs.Write(new byte[] { 0x64, 0x61, 0x74, 0x61 }, 0, 4); // "data"
-            fs.Write(BitConverter.GetBytes((uint)(signal.Length * 2 * channelCount)), 0, 4);
+            var ms = new MemoryStream();
+            ms.Write(new byte[] { 0x52, 0x49, 0x46, 0x46 }, 0, 4); // "RIFF"
+            ms.Write(BitConverter.GetBytes((uint)(36 + signal.Length * 2 * channelCount)), 0, 4);
+            ms.Write(new byte[] { 0x57, 0x41, 0x56, 0x45 }, 0, 4); // "WAVE"
+            ms.Write(new byte[] { 0x66, 0x6D, 0x74, 0x20 }, 0, 4); // "fmt"
+            ms.Write(BitConverter.GetBytes((uint)(16)), 0, 4);
+            ms.Write(BitConverter.GetBytes((ushort)(1)), 0, 2);
+            ms.Write(BitConverter.GetBytes((ushort)(channelCount)), 0, 2);
+            ms.Write(BitConverter.GetBytes((uint)(sampleRate)), 0, 4); // Hz
+            ms.Write(BitConverter.GetBytes((uint)(sampleRate * 2 * channelCount)), 0, 4);
+            ms.Write(BitConverter.GetBytes((ushort)(2 * channelCount)), 0, 2);
+            ms.Write(BitConverter.GetBytes((ushort)(16)), 0, 2); // bps
+            ms.Write(new byte[] { 0x64, 0x61, 0x74, 0x61 }, 0, 4); // "data"
+            ms.Write(BitConverter.GetBytes((uint)(signal.Length * 2 * channelCount)), 0, 4);
             foreach (short v in signal)
             {
-                fs.Write(BitConverter.GetBytes(v), 0, 2);
+                ms.Write(BitConverter.GetBytes(v), 0, 2);
                 for (int i = 0; i < channelCount - 1; i++)
-                    fs.Write(BitConverter.GetBytes((ushort)0), 0, 2);
+                    ms.Write(BitConverter.GetBytes((ushort)0), 0, 2);
             }
-            fs.Close();
+            ms.Position = 0;
+            return ms;
         }
     }
 }

@@ -452,26 +452,27 @@ namespace SoundReceiver
 
         double RootRaisedCosine(double t, double bitDuration, double beta)
         {
-            double epsilon = 1e-12;
+            const double epsilon = 1e-12;
+            double fourbeta = 4.0 * beta;
             if (Math.Abs(t) < epsilon)
             {
                 return 1.0 + beta * (4.0 / Math.PI - 1.0);
             }
-            else if (Math.Abs(Math.Abs(t) - bitDuration / (4.0 * beta)) > epsilon)
+            else if (Math.Abs(Math.Abs(t) - bitDuration / fourbeta) > epsilon)
             {
                 double f = t / bitDuration;
                 return (
                     Math.Sin((Math.PI * f) * (1.0 - beta)) +
-                    (4.0 * beta * f) *
+                    (fourbeta * f) *
                     Math.Cos((Math.PI * f) * (1.0 + beta))) /
                     ((Math.PI * f) *
-                    (1.0 - Math.Pow(4.0 * beta * f, 2.0)));
+                    (1.0 - fourbeta * fourbeta * f * f));
             }
             else
             {
                 return (beta / Math.Sqrt(2.0)) *
-                    ((1.0 + 2.0 / Math.PI) * Math.Sin(Math.PI / (4.0 * beta)) +
-                    (1.0 - 2.0 / Math.PI) * Math.Cos(Math.PI / (4.0 * beta)));
+                    ((1.0 + 2.0 / Math.PI) * Math.Sin(Math.PI / fourbeta) +
+                    (1.0 - 2.0 / Math.PI) * Math.Cos(Math.PI / fourbeta));
             }
         }
 
