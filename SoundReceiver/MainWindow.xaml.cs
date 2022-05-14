@@ -118,8 +118,8 @@ namespace SoundReceiver
                 DispatcherPriority.Normal,
                 new Action(() =>
                 {
-                    SNRTextBlock.Text = snr == null ? "—" : $"{snr,2} dB";
-                    MERTextBlock.Text = mer == null ? "—" : $"{mer,2} dB";
+                    SNRTextBlock.Text = snr == null ? "—" : $"{Convert.ToInt32(snr),2} dB";
+                    MERTextBlock.Text = mer == null ? "—" : $"{Convert.ToInt32(mer),2} dB";
                     MessageTextBox.Text = resultStr;
 
                     FreqSlider.IsEnabled = true;
