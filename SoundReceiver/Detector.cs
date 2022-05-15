@@ -275,17 +275,10 @@ namespace SoundReceiver
 
             var d3f = Convolve(bestEq, d3);
 
-            var d3if = d3f.Select(x => x.Real).ToArray();
-            var d3qf = d3f.Select(x => x.Imaginary).ToArray();
-
-            if (debug) SaveWav("d3if.wav", SignalDtoS(Mul(d3if, 0.25)), (int)decSampleRate);
-            if (debug) SaveWav("d3qf.wav", SignalDtoS(Mul(d3qf, 0.25)), (int)decSampleRate);
-
+            double[] d4 = null;
+            int debugSampleRate = 0;
+            const double d3scale = 0.25;
             const int debugInterpolationFactor = 8;
-
-            double[] d3if2 = null;
-            double[] d3qf2 = null;
-
             if (debug)
             {
                 double[] debugRrc = Mul(MakeRootRaisedCosine(
@@ -293,21 +286,23 @@ namespace SoundReceiver
                     estBitlen * debugInterpolationFactor,
                     rrcBeta), 1 / estBitlen);
 
-                d3if2 = Convolve(debugRrc, StuffZeroes(d3if, debugInterpolationFactor));
-                d3qf2 = Convolve(debugRrc, StuffZeroes(d3qf, debugInterpolationFactor));
+                var d3if = d3f.Select(x => x.Real).ToArray();
+                var d3qf = d3f.Select(x => x.Imaginary).ToArray();
+                SaveWav("d3if.wav", SignalDtoS(Mul(d3if, d3scale)), (int)decSampleRate);
+                SaveWav("d3qf.wav", SignalDtoS(Mul(d3qf, d3scale)), (int)decSampleRate);
 
-                SaveWav("d3if2.wav", SignalDtoS(Mul(d3if2, 0.25)),
-                    (int)(decSampleRate * debugInterpolationFactor));
-                SaveWav("d3qf2.wav", SignalDtoS(Mul(d3qf2, 0.25)),
-                    (int)(decSampleRate * debugInterpolationFactor));
+                debugSampleRate = (int)(decSampleRate * debugInterpolationFactor);
+                var d3if2 = Convolve(debugRrc, StuffZeroes(d3if, debugInterpolationFactor));
+                var d3qf2 = Convolve(debugRrc, StuffZeroes(d3qf, debugInterpolationFactor));
+                SaveWav("d3if2.wav", SignalDtoS(Mul(d3if2, d3scale)), debugSampleRate);
+                SaveWav("d3qf2.wav", SignalDtoS(Mul(d3qf2, d3scale)), debugSampleRate);
+
+                d4 = new double[d3if2.Length];
             }
 
             var bits = new List<bool>();
             var bitMER = new List<double>();
 
-            double[] d4 = null;
-            if (debug)
-                d4 = new double[d3if2.Length];
             for (double tf = bestDelta; tf < d3f.Length - rrc.Length + 1; tf += estBitlen)
             {
                 int ti = (int)tf;
@@ -335,11 +330,7 @@ namespace SoundReceiver
                 }
             }
 
-            if (debug)
-            {
-                SaveWav("d4.wav", SignalDtoS(Mul(d4, 0.25)),
-                    (int)(decSampleRate * debugInterpolationFactor));
-            }
+            if (debug) SaveWav("d4.wav", SignalDtoS(Mul(d4, d3scale)), debugSampleRate);
 
             if (bits.Count < equalizerTrainSequence.Length + payloadSizeLsbSize)
                 throw new SignalException("Wrong packet format");
