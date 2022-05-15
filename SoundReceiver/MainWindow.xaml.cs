@@ -65,6 +65,7 @@ namespace SoundReceiver
 
                 // WaveIn needs to be reinitialized each time:
                 // https://github.com/naudio/NAudio/issues/49#issuecomment-280446686
+                waveIn?.Dispose();
                 waveIn = new WaveIn();
                 waveIn.WaveFormat = new WaveFormat(44100, 1);
                 waveIn.DataAvailable += waveIn_DataAvailable;
@@ -80,6 +81,8 @@ namespace SoundReceiver
             {
                 if (ex.Result == MmResult.BadDeviceId)
                     MessageTextBox.Text = "[Recording device is not found]";
+                else
+                    MessageTextBox.Text = $"[Recording error: {ex.Result}]";
             }
         }
 
@@ -88,7 +91,6 @@ namespace SoundReceiver
             createWavFile = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
 
             waveIn.StopRecording();
-            waveIn = null;
             StopButton.IsEnabled = false;
         }
 

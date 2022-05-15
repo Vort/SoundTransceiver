@@ -73,8 +73,11 @@ namespace SoundReceiver
             double[] d23 = Integrate(d21, integrateBitLen2);
             if (debug) SaveWav("d23.wav", SignalDtoS(d23));
 
-            double[] d24 = new double[d22.Length - integrateBitLen2];
-            double[] d25 = new double[d22.Length - integrateBitLen2];
+            int d24len = d22.Length - integrateBitLen2;
+            if (d24len <= 0)
+                throw new SignalException("Not enough samples");
+            double[] d24 = new double[d24len];
+            double[] d25 = new double[d24len];
             MinMax(d22, integrateBitLen2, d24, d25);
 
             if (debug) SaveWav("d24.wav", SignalDtoS(d24));
@@ -200,7 +203,6 @@ namespace SoundReceiver
 
 
             int deltaRange = Convert.ToInt32(estBitlen * 2);
-            //int deltaRange = 0;
 
             int eqSize = (int)(10 * estBitlen) | 1;
             Complex[] d3 = new Complex[signalEndFine - signalStartFine +
